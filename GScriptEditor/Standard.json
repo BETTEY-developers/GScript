@@ -376,10 +376,6 @@
     },
     {
       "Type": "KnownType",
-      "RawString": "flag"
-    },
-    {
-      "Type": "KnownType",
       "RawString": "tag_t",
       "ConstantType": "Tag"
     },

@@ -140,6 +140,6 @@ internal partial class Editor
         var menu = new TopMenu(menuGroups);
 
         // 弹出菜单并等待选择
-        var result = menu.Ask(()=>Update(isPreviewMode ? previewpage : editpage));
+        var result = menu.Ask(()=>Update(isPreviewMode ? Previewpage : Editpage));
     }
 }

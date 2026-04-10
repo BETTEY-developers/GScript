@@ -17,7 +17,7 @@ internal struct ColorSet
 
     public override int GetHashCode()
     {
-        return R * G * B;
+        return ~(R+1) * ~(G<<2+1) * ~(B<<4+1);
     }
 
     public override bool Equals([NotNullWhen(true)] object? obj)
@@ -27,6 +27,10 @@ internal struct ColorSet
 
     public static implicit operator Color(ColorSet set)
     {
+        // Clac. HashCode R: -1; G: -1; B: -1;
+        const int NoneColorSetHashCode = -217;
+        if (set.GetHashCode() == NoneColorSetHashCode)
+            return Color.Black;
         return Color.FromArgb(set.R, set.G, set.B);
     }
 }
@@ -67,7 +71,7 @@ internal class StyleTable
         Tag.ForEach(x => list.Add(new() { ConstantType = null, RawString = x.RawString, Type = x.Type }));
         Definition.ForEach(x => list.Add(new() { ConstantType = null, RawString = x.RawString, Type = x.Type }));
         Special.ForEach(x => list.Add(new() { ConstantType = null, RawString = x.RawString, Type = x.Type }));
-        KnownType.ForEach(x => list.Add(new() { ConstantType = x.ConstantType, RawString = x.RawString, Type = x.Type }));
-        return list;
+        // 'flag' type always analyzed as a known type, so we add it here.
+        return [..list.Concat(KnownType.Concat([new() { RawString = "flag", Type = KeyType.KnownType}]).Select(x => (KeyUnit)x))];
     }
 }

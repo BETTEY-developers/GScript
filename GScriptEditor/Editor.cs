@@ -5,6 +5,13 @@ using TrueColorConsole;
 using System.Drawing;
 using GScript.Analyzer.InternalType;
 using GScript.Analyzer.Util;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Collections.Generic;
+using System.Diagnostics.Metrics;
+using GScript.Editor.Helpers;
+using System.Diagnostics;
 
 namespace GScript.Editor;
 
@@ -26,9 +33,26 @@ internal partial class Editor
     private bool isPreviewMode = false;
     private int col;
     private int row;
-    private int previewpage;
-    private int editpage;
-    private int EditRow => row + editpage * Console.WindowHeight;
+    private int Previewpage
+    {
+        get;
+        set
+        {
+            field = value;
+            doUpdate = true;
+        }
+    }
+    private int Editpage
+    {
+        get;
+        set
+        {
+            field = value;
+            doUpdate = true;
+        }
+    }
+    private bool doUpdate = true;
+    private int EditRow => row + Editpage * Console.WindowHeight;
 
     public Editor(StyleTable configStyle)
     {
@@ -43,8 +67,8 @@ internal partial class Editor
         BackTemp = new();
         col = TextAreaPaddingLeft;
         row = 0;
-        previewpage = 0;
-        editpage = 0;
+        Previewpage = 0;
+        Editpage = 0;
     }
 
     public Editor(string configPath)
@@ -56,30 +80,37 @@ internal partial class Editor
     {
         while (true)
         {
-            Update(isPreviewMode ? previewpage : editpage);
-            VTConsole.CursorPosition(row + 1, col + 1);
+            try
+            {
+                if(doUpdate)
+                    Update(isPreviewMode ? Previewpage : Editpage);
+                
+                VTConsole.CursorPosition(row + 1, col + 1);
+                var key = Console.ReadKey();
 
-            var key = Console.ReadKey();
+                if (HandleMenu(key)) continue;
+                if (HandleSave(key)) continue;
+                if (HandleSaveAs(key)) continue;
+                if (HandleUndo(key)) continue;
+                if (HandleRedo(key)) continue;
+                if (HandlePaste(key)) continue;
+                if (HandleOtherKey(key)) continue;
+                if ((doUpdate = false) || HandleNavigation(key)) continue;
+                if (!(doUpdate = true) || HandleEdit(key)) continue;
 
-            if (HandleMenu(key)) continue;
-            if (HandleSave(key)) continue;
-            if (HandleSaveAs(key)) continue;
-            if (HandleUndo(key)) continue;
-            if (HandleRedo(key)) continue;
-            if (HandlePaste(key)) continue;
-            if (HandleOtherKey(key)) continue;
-            if (HandleNavigation(key)) continue;
-            if (HandleEdit(key)) continue;
+                // 普通字符输入
+                isPreviewMode = false;
+                if (col - TextAreaPaddingLeft == currentString.Length)
+                    currentString += key.KeyChar;
+                else
+                    currentString = currentString.Insert(col - TextAreaPaddingLeft, key.KeyChar.ToString());
+                col++;
 
-            // 普通字符输入
-            isPreviewMode = false;
-            if (col - TextAreaPaddingLeft == currentString.Length)
-                currentString += key.KeyChar;
-            else
-                currentString = currentString.Insert(col - TextAreaPaddingLeft, key.KeyChar.ToString());
-            col++;
-
-            UpdateLine();
+                UpdateLine();
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -87,7 +118,7 @@ internal partial class Editor
     {
         if (key.Key == ConsoleKey.F1)
         {
-            ShowMenu(isPreviewMode ? previewpage : editpage);
+            ShowMenu(isPreviewMode ? Previewpage : Editpage);
             VTConsole.SetScrollingRegion(1, 1);
             return true;
         }
@@ -96,7 +127,7 @@ internal partial class Editor
 
     private bool HandleSave(ConsoleKeyInfo key)
     {
-        if (key.Key == ConsoleKey.S && key.Modifiers == ConsoleModifiers.Control)
+        if (key.Key == ConsoleKey.S && key.Modifiers == (ConsoleModifiers.Control | ConsoleModifiers.Shift))
         {
             var content = GetContentArea();
             if (string.IsNullOrEmpty(FileName))
@@ -141,7 +172,7 @@ internal partial class Editor
             Raw = ru;
             row = r;
             col = c;
-            editpage = p;
+            Editpage = p;
             currentString = Raw[EditRow];
             return true;
         }
@@ -158,7 +189,7 @@ internal partial class Editor
             Raw = ru;
             row = r;
             col = c;
-            editpage = p;
+            Editpage = p;
             currentString = Raw[EditRow];
             return true;
         }
@@ -240,110 +271,208 @@ internal partial class Editor
 
     private bool HandleNavigation(ConsoleKeyInfo key)
     {
-        if ((key.Key is ConsoleKey.DownArrow or ConsoleKey.UpArrow or ConsoleKey.LeftArrow or ConsoleKey.RightArrow)
-            && Units.Count == 0)
+        // 如果没有内容可导航或在最上方无法上移
+        if ((IsArrowKey(key.Key) && Units.Count == 0)
+            || (key.Key == ConsoleKey.UpArrow && row == 0 && Editpage == 0))
+        {
             return true;
-        if (key.Key == ConsoleKey.UpArrow && row == 0 && editpage == 0)
-            return true;
+        }
 
         switch (key.Key)
         {
             case ConsoleKey.DownArrow:
-                isPreviewMode = false;
-                row++;
-                if (row >= Console.WindowHeight - 1)
-                {
-                    editpage++;
-                    row = 0;
-                    return true;
-                }
-                else if (row < Console.WindowHeight)
-                {
-                    return true;
-                }
-                if (Raw[EditRow].Length != 0 && Raw[EditRow].Length + TextAreaPaddingLeft < col)
-                {
-                    VTConsole.CursorAbsoluteVertical(Raw[EditRow].Length - 2);
-                    col = Raw[EditRow].Length + TextAreaPaddingLeft;
-                }
-                else if (Raw[EditRow].Length == 0)
-                {
-                    col = TextAreaPaddingLeft;
-                }
+                HandleDownArrow();
                 return true;
+
             case ConsoleKey.UpArrow:
-                isPreviewMode = false;
-                row--;
-                if (row < 0 && editpage > 0)
-                {
-                    editpage--;
-                    row = Console.WindowHeight - 1;
-                    if (Raw[EditRow].Length == 0)
-                    {
-                        col = TextAreaPaddingLeft;
-                    }
-                    return true;
-                }
-                else if (row < 0)
-                {
-                    row++;
-                    return true;
-                }
-                if (Raw[EditRow].Length != 0 && Raw[EditRow].Length + TextAreaPaddingLeft < col)
-                {
-                    VTConsole.CursorAbsoluteVertical(Raw[EditRow].Length + TextAreaPaddingLeft);
-                    col = Raw[EditRow].Length + TextAreaPaddingLeft;
-                }
-                else if (Raw[EditRow].Length == 0)
-                {
-                    col = TextAreaPaddingLeft;
-                }
+                HandleUpArrow();
                 return true;
+
             case ConsoleKey.LeftArrow:
-                isPreviewMode = false;
-                col--;
-                if (col < TextAreaPaddingLeft)
-                {
-                    col = TextAreaPaddingLeft;
-                }
+                HandleLeftArrow();
                 return true;
+
             case ConsoleKey.RightArrow:
-                isPreviewMode = false;
-                col++;
-                if (col >= Raw[EditRow].Length + TextAreaPaddingLeft)
-                {
-                    col = Raw[EditRow].Length + TextAreaPaddingLeft;
-                }
+                HandleRightArrow();
                 return true;
+
             case ConsoleKey.End:
-                isPreviewMode = false;
-                col = Raw[EditRow].Length + TextAreaPaddingLeft;
+                HandleEndKey();
                 return true;
+
             case ConsoleKey.Home:
-                isPreviewMode = false;
-                col = TextAreaPaddingLeft;
+                HandleHomeKey();
                 return true;
+
             case ConsoleKey.PageUp:
-                if (isPreviewMode && previewpage > 0)
-                    previewpage--;
-                else
-                {
-                    previewpage = editpage - 1;
-                    isPreviewMode = true;
-                }
+                HandlePageUp();
                 return true;
+
             case ConsoleKey.PageDown:
-                if (isPreviewMode)
-                    previewpage++;
-                else
-                {
-                    previewpage = editpage + 1;
-                    isPreviewMode = true;
-                }
+                HandlePageDown();
                 return true;
         }
+
         return false;
     }
+
+    #region 小方法拆分
+
+    // 判断是否为方向键
+    private bool IsArrowKey(ConsoleKey key) =>
+        key is ConsoleKey.DownArrow
+            or ConsoleKey.UpArrow
+            or ConsoleKey.LeftArrow
+            or ConsoleKey.RightArrow;
+
+    // 处理“↓”键
+    private void HandleDownArrow()
+    {
+        isPreviewMode = false;
+        row++;
+
+        // 滚动到下一“编辑页”
+        if (row >= Console.WindowHeight - 1)
+        {
+            Editpage++;
+            row = 0;
+            return;
+        }
+
+        // 在可见区域内上下移动
+        if (row < Console.WindowHeight)
+        {
+            return;
+        }
+
+        AdjustCursorAfterDownMove();
+    }
+
+    // 处理“↑”键
+    private void HandleUpArrow()
+    {
+        isPreviewMode = false;
+        row--;
+
+        // 滚动到上一“编辑页”
+        if (row < 0 && Editpage > 0)
+        {
+            Editpage--;
+            row = Console.WindowHeight - 1;
+
+            if (Raw[EditRow].Length == 0)
+            {
+                col = TextAreaPaddingLeft;
+            }
+            return;
+        }
+
+        // 到达文档顶部后回退
+        if (row < 0)
+        {
+            row++;
+            return;
+        }
+
+        AdjustCursorAfterUpMove();
+    }
+
+    // 处理“←”键
+    private void HandleLeftArrow()
+    {
+        isPreviewMode = false;
+        col--;
+        if (col < TextAreaPaddingLeft)
+        {
+            col = TextAreaPaddingLeft;
+        }
+    }
+
+    // 处理“→”键
+    private void HandleRightArrow()
+    {
+        isPreviewMode = false;
+        col++;
+        int maxCol = Raw[EditRow].Length + TextAreaPaddingLeft;
+        if (col >= maxCol)
+        {
+            col = maxCol;
+        }
+    }
+
+    // 处理“End”键
+    private void HandleEndKey()
+    {
+        isPreviewMode = false;
+        col = Raw[EditRow].Length + TextAreaPaddingLeft;
+    }
+
+    // 处理“Home”键
+    private void HandleHomeKey()
+    {
+        isPreviewMode = false;
+        col = TextAreaPaddingLeft;
+    }
+
+    // 处理“PageUp”键
+    private void HandlePageUp()
+    {
+        if (isPreviewMode && Previewpage > 0)
+        {
+            Previewpage--;
+        }
+        else
+        {
+            Previewpage = Editpage - 1;
+            isPreviewMode = true;
+        }
+    }
+
+    // 处理“PageDown”键
+    private void HandlePageDown()
+    {
+        if (isPreviewMode)
+        {
+            Previewpage++;
+        }
+        else
+        {
+            Previewpage = Editpage + 1;
+            isPreviewMode = true;
+        }
+    }
+
+    // 向下翻页后调整光标位置
+    private void AdjustCursorAfterDownMove()
+    {
+        int length = Raw[EditRow].Length;
+        if (length != 0 && length + TextAreaPaddingLeft < col)
+        {
+            VTConsole.CursorAbsoluteVertical(length - 2);
+            col = length + TextAreaPaddingLeft;
+        }
+        else if (length == 0)
+        {
+            col = TextAreaPaddingLeft;
+        }
+    }
+
+    // 向上翻页后调整光标位置
+    private void AdjustCursorAfterUpMove()
+    {
+        int length = Raw[EditRow].Length;
+        if (length != 0 && length + TextAreaPaddingLeft < col)
+        {
+            VTConsole.CursorAbsoluteVertical(length + TextAreaPaddingLeft);
+            col = length + TextAreaPaddingLeft;
+        }
+        else if (length == 0)
+        {
+            col = TextAreaPaddingLeft;
+        }
+    }
+
+    #endregion
 
     private bool HandleEdit(ConsoleKeyInfo key)
     {
@@ -355,7 +484,7 @@ internal partial class Editor
                 {
                     Units.Add(new());
                     row = 0;
-                    editpage++;
+                    Editpage++;
                     col = tabCount * TabSize + TextAreaPaddingLeft;
                     currentString = Raw[EditRow];
                     return true;
@@ -388,7 +517,7 @@ internal partial class Editor
                 }
                 else if (col == TextAreaPaddingLeft)
                 {
-                    if (Units.Count <= row + Console.WindowHeight * editpage + 1)
+                    if (Units.Count <= row + Console.WindowHeight * Editpage + 1)
                     {
                         Units.Add(Enumerable.Repeat(new KeyUnit() { RawString = "    ", Type = KeyType.Text }, tabCount).ToList());
                         Raw.Add(string.Join(string.Empty, Enumerable.Repeat("    ", tabCount)));
@@ -457,18 +586,18 @@ internal partial class Editor
     private bool HandleBackspaceDelete(ConsoleKeyInfo key)
     {
         isPreviewMode = false;
-        if (col == TextAreaPaddingLeft && row == 0 && editpage > 0)
+        if (col == TextAreaPaddingLeft && row == 0 && Editpage > 0)
         {
             if (Raw[EditRow].Length == 0)
             {
                 Units.RemoveAt(EditRow);
-                if (Raw[row + editpage * Console.WindowHeight - 1].Length > 0)
+                if (Raw[row + Editpage * Console.WindowHeight - 1].Length > 0)
                 {
                     col = Raw[row - 1].Length + TextAreaPaddingLeft;
                 }
             }
             row = Console.WindowHeight - 1;
-            editpage--;
+            Editpage--;
             return true;
         }
 
@@ -546,9 +675,10 @@ internal partial class Editor
         Units[EditRow] = ku;
         Raw[EditRow] = currentString;
         if (!ku.Exists((x) => x.Type == KeyType.Text))
-            History.Push((Units, Raw, EditRow, col, editpage));
+            History.Push((Units, Raw, EditRow, col, Editpage));
     }
 
+    [DebuggerStepThrough]
     public KeyUnit MakeUnit(string rawString, KeyType keyType)
         => new() { Type = keyType, RawString = rawString };
 
@@ -558,172 +688,629 @@ internal partial class Editor
     public List<KeyUnit> GetUnits(string currentString, bool hasCommand = true)
         => GetUnits(currentString, Keys, TabSize, hasCommand);
 
+    /// <summary>
+    /// Converts a string into a list of syntax-highlighted KeyUnit objects based on the defined rules.
+    /// </summary>
+    /// <param name="currentString">The string to parse</param>
+    /// <param name="keys">Dictionary of keywords with their corresponding KeyUnit</param>
+    /// <param name="tabSize">Number of spaces per tab (4)</param>
+    /// <param name="hasCommand">Whether to treat the first token as a command</param>
+    /// <returns>List of KeyUnit objects representing the syntax components</returns>
     public List<KeyUnit> GetUnits(string currentString, Dictionary<string, KeyUnit> keys, int tabSize, bool hasCommand = true)
     {
         List<KeyUnit> ku = new();
-        int i = 0;
 
-        while (currentString.Length > 0 && i < currentString.Length && currentString[i] == ' ')
-        {
-            if (i != 0 && (i + 1) % tabSize == 0)
-            {
-                ku.Add(MakeUnit("    ", KeyType.Text));
-                currentString = currentString.Remove(0, tabSize);
-                i = 0;
-                continue;
-            }
-            i++;
-        }
-        if (i % tabSize != 0)
-        {
-            ku.Add(MakeUnit(new(' ', i % tabSize), KeyType.Text));
-            currentString.Remove(0, i % tabSize);
-        }
+        // 1. Process leading spaces into tabs and remaining spaces
+        ProcessLeadingSpaces(ku, currentString, tabSize);
 
-        StringSplit split = new(currentString, ' ');
+        // 2. Split the string into tokens (parts separated by spaces)
+        StringSplit split = new(currentString, ' ', true);
 
+        // 3. Handle the first token if we're parsing commands
         if (hasCommand)
         {
-            if (split.SplitUnit.Length == 0)
-                return new();
-            if (keys.TryGetValue(split[0], out KeyUnit value))
-                ku.Add(value);
-            else
-                ku.Add(MakeUnit(split[0], KeyType.Text));
-
-            ku.Add(MakeUnit(" ", KeyType.Split));
+            HandleFirstCommandToken(ku, split, keys);
         }
 
-        int index = 0;
-
-        foreach (string su in split[(hasCommand ? 1 : 0)..])
-        {
-            ScriptObject go = new ScriptObject();
-            var part = StrParenthesis.GetStringParenthesisType(su);
-            string parContent = su[1..(part.HasFlag(ParenthesisType.Half) ? ^0 : ^1)];
-            switch (part.HasFlag(ParenthesisType.Half) ? part ^ ParenthesisType.Half : part)
-            {
-                case ParenthesisType.Unknown:
-                    ku.Add(MakeUnit(su, KeyType.Text));
-                    break;
-                case ParenthesisType.Big:
-                    ku.Add(new() { RawString = su, Type = KeyType.Type });
-                    break;
-                case ParenthesisType.Middle:
-                    go = new ScriptObject();
-                    ku.Add(MakeUnit("[", KeyType.Parenthesis));
-                    if (su.Length == 1)
-                        break;
-                    var su2 = parContent;
-                    if (!part.HasFlag(ParenthesisType.Half) && su2.Length == 0)
-                        goto MiddleEnd;
-                    if (!su2.Contains(":"))
-                    {
-                        ku.Add(MakeUnit(su2, KeyType.Text));
-                        goto MiddleEnd;
-                    }
-                    var sp = new StringSplit(su2, ':');
-                    if (su2.Length < 3) goto MiddleEnd;
-                    if (keys.TryGetValue(sp[0], out KeyUnit type) && type.Type == KeyType.KnownType)
-                        ku.Add(type);
-                    else
-                        ku.Add(MakeUnit(sp[0], KeyType.Type));
-                    ku.Add(MakeUnit(":", KeyType.Symbol));
-                    if (sp[0] == "flag")
-                    {
-                        List<KeyUnit> ku1 = new();
-                        try
-                        {
-                            var sp2 = new StringSplitEx(string.Join(":", sp[1..]), ':', 2);
-                            ku1.Add(MakeUnit(sp2[0], KeyType.Tag));
-                            ku1.Add(MakeUnit(":", KeyType.Symbol));
-                            if (sp2.SplitUnit.Count > 1)
-                                ku1.Add(MakeUnit(sp2[1], KeyType.String));
-                        }
-                        catch
-                        {
-                            ku1.Add(MakeUnit(string.Join(string.Empty, sp[1..]), KeyType.Text));
-                        }
-                        ku.AddRange(ku1);
-                    }
-                    else if (!keys.ContainsKey(sp[0]))
-                    {
-                        ku.Add(MakeUnit(sp[1], KeyType.Text));
-                    }
-                    else if (type.Type == KeyType.KnownType &&
-                            type.ConstantType.HasValue &&
-                            type.ConstantType.Value != KeyType.Unknown &&
-                            sp.SplitUnit.Length > 1)
-                    {
-                        var ct = type.ConstantType;
-                        bool canparse = IsOnlyType(string.Concat(sp[1..]), CodeHighlightRuleSet.ValueVaildRegularExpressions[ct.Value]);
-                        if (canparse)
-                        {
-                            ku.Add(MakeUnit(sp[1], ct.Value));
-                        }
-                        else
-                        {
-                            ku.Add(MakeUnit(sp[1], KeyType.Text));
-                        }
-                    }
-                    else if (sp.SplitUnit.Length > 1)
-                    {
-                        ku.Add(MakeUnit(sp[1], KeyType.Text));
-                    }
-                MiddleEnd:
-                    if (!part.HasFlag(ParenthesisType.Half))
-                        ku.Add(MakeUnit("]", KeyType.Parenthesis));
-                    break;
-                case ParenthesisType.Small:
-                    ku.Add(MakeUnit("(", KeyType.Parenthesis));
-                    var su1 = parContent;
-                    if (keys.TryGetValue(su1, out KeyUnit variable) && variable.Type == KeyType.CritialVariable)
-                        ku.Add(MakeUnit(su1, KeyType.CritialVariable));
-                    else
-                        ku.Add(MakeUnit(su1, KeyType.Variable));
-                    if (!part.HasFlag(ParenthesisType.Half))
-                        ku.Add(MakeUnit(")", KeyType.Parenthesis));
-                    break;
-                case ParenthesisType.Sharp:
-                    ku.Add(MakeUnit("<", KeyType.Parenthesis));
-
-                    var aisp = new StringSplit(parContent, ',');
-
-                    int aispi = 0;
-                    foreach (string asu in aisp.SplitUnit)
-                    {
-                        if (asu.StartsWith(' '))
-                        {
-                            string mv = StartWhiteSpace().Match(asu).Value;
-                            ku.Add(MakeUnit(mv, KeyType.Split));
-                        }
-                        List<KeyUnit> arrItem = GetUnits(asu.Trim(' '), keys, tabSize, false);
-                        if (arrItem.Count > 0)
-                            ku.AddRange(arrItem);
-                        if (asu.EndsWith(' '))
-                        {
-                            string mv = EndWhiteSpace().Match(asu).Value;
-                            ku.Add(MakeUnit(mv, KeyType.Split));
-                        }
-                        if (aispi < aisp.SplitUnit.Length - 1)
-                            ku.Add(MakeUnit(",", KeyType.Symbol));
-
-                        aispi++;
-                    }
-
-                    if (!part.HasFlag(ParenthesisType.Half))
-                        ku.Add(MakeUnit(">", KeyType.Parenthesis));
-                    break;
-                default:
-                    ku.Add(MakeUnit(su, KeyType.Text));
-                    break;
-            }
-            if (index < split.SplitUnit.Length - 1)
-                ku.Add(MakeUnit(" ", KeyType.Split));
-        }
+        // 4. Process remaining tokens (after the command) with their parenthesis types
+        ProcessRemainingTokens(ku, split, keys, tabSize);
 
         return ku;
     }
+
+    /// <summary>
+    /// Processes leading spaces in the string and converts them into tab units.
+    /// </summary>
+    private void ProcessLeadingSpaces(List<KeyUnit> ku, string currentString, int tabSize)
+    {
+        if (string.IsNullOrEmpty(currentString))
+            return;
+
+        // Get leading whitespace using regex
+        var leadingMatch = StartWhiteSpace().Match(currentString);
+        int leadingSpacesCount = leadingMatch.Length;
+
+        // Calculate how many full tabs and remaining spaces there are
+        int tabCount = leadingSpacesCount / tabSize;
+        int remainingSpaces = leadingSpacesCount % tabSize;
+
+        // Add tab units for each full tab size
+        for (int i = 0; i < tabCount; i++)
+        {
+            ku.Add(MakeUnit("    ", KeyType.Text));
+        }
+
+        // Add remaining spaces if any
+        if (remainingSpaces > 0)
+        {
+            ku.Add(MakeUnit(new string(' ', remainingSpaces), KeyType.Text));
+        }
+
+        // Remove processed leading spaces from the string
+        currentString = currentString.Substring(leadingSpacesCount);
+    }
+
+    /// <summary>
+    /// Handles the first token when hasCommand is true.
+    /// </summary>
+    private void HandleFirstCommandToken(List<KeyUnit> ku, StringSplit split, Dictionary<string, KeyUnit> keys)
+    {
+        // If no tokens after splitting, return empty list
+        if (split.SplitUnit.Length == 0)
+            return;
+
+        // Check if first token is a known command
+        if (keys.TryGetValue(split[0].Trim(), out KeyUnit value))
+        {
+            ku.Add(value);
+        }
+        else
+        {
+            ku.Add(MakeUnit(split[0], KeyType.Text));
+        }
+
+        // Add a space separator if it's not the end of the string
+        if (split.SplitUnit.Length > 1)
+        {
+            ku.Add(MakeUnit(split.Tokens[1].TokenString, KeyType.Split));
+        }
+    }
+
+    /// <summary>
+    /// Processes remaining tokens after the command token.
+    /// </summary>
+    private void ProcessRemainingTokens(List<KeyUnit> ku, StringSplit split, Dictionary<string, KeyUnit> keys, int tabSize)
+    {
+        int startIndex = split.SplitUnit.Length > 0 ? 2 : 0;
+
+        // Process each remaining token
+        for (long index = startIndex; index < split.Tokens.Count; index++)
+        {
+            SplitToken tokenRaw = split[index];
+            ProcessSingleToken(ku, keys, tabSize, tokenRaw);
+        }
+    }
+
+    private bool CheckInnering(string token)
+    {
+        int checkCount = 0;
+
+        int currentIndex = 0;
+        foreach (char c in token)
+        {
+            if (c == '(' || c == '[' || c == '{')
+            {
+                checkCount++;
+            }
+            else if (c == ')' || c == ']' || c == '}')
+            {
+                checkCount--;
+                if (checkCount == 0 && currentIndex < token.Length - 1)
+                    return true;
+            }
+            currentIndex++;
+        }
+        return false;
+    }
+
+    private void ProcessSingleToken(List<KeyUnit> ku, Dictionary<string, KeyUnit> keys, int tabSize, SplitToken tokenRaw, bool checkInner = false)
+    {
+        if(checkInner)
+        {
+            if (CheckInnering(tokenRaw.TokenString))
+            {
+                ku.Add(MakeUnit(tokenRaw.TokenString, KeyType.Text));
+                return;
+            }
+        }
+
+        if (tokenRaw.Type == SplitTokenType.SplitSeparator)
+        {
+            ku.Add(MakeUnit(tokenRaw.TokenString, KeyType.Split));
+            return;
+        }
+
+        string token = tokenRaw.TokenString;
+        // Determine parenthesis type of the token
+        var part = StrParenthesis.GetStringParenthesisType(token);
+
+        if (part == ParenthesisType.Unknown)
+        {
+            // If the token is not a parenthesis, treat it as text
+            ProcessUnknownArguemnt(ku, token, keys);
+            return;
+        }
+
+        // If the token is a half parenthesis, we need to handle it differently
+        if (part.HasFlag(ParenthesisType.Half))
+        {
+            ku.Add(MakeUnit(token, KeyType.Parenthesis));
+            return;
+        }
+
+        string parContent = token[1..(part.HasFlag(ParenthesisType.Half) ? ^0 : ^1)];
+
+        switch (part.HasFlag(ParenthesisType.Half) ? part ^ ParenthesisType.Half : part)
+        {
+            case ParenthesisType.Big:
+                ku.Add(new() { RawString = token, Type = KeyType.Type });
+                break;
+
+            case ParenthesisType.Middle:
+                ProcessMiddleParenthesis(ku, token, part, keys);
+                break;
+
+            case ParenthesisType.Small:
+                ProcessSmallParenthesis(ku, token, part, keys);
+                break;
+
+            case ParenthesisType.Sharp:
+                ProcessSharpParenthesis(ku, token, part, keys, tabSize);
+                break;
+
+            default:
+                ku.Add(MakeUnit(token, KeyType.Text));
+                break;
+        }
+    }
+
+    private void ProcessUnknownArguemnt(List<KeyUnit> ku, string token, Dictionary<string, KeyUnit> keys)
+    {
+        List<KeyUnit> result = new();
+        if (StrParenthesis.GetCharHalfParenthesisType(token[0]) is ParenthesisType t && t.HasFlag(ParenthesisType.Unknown))
+        {
+            ku.Add(MakeUnit(token, KeyType.Text));
+            return;
+        }
+
+        result.Add(MakeUnit(token[0].ToString(), KeyType.Parenthesis));
+        if(t.HasFlag(ParenthesisType.Right))
+        {
+            result.Add(MakeUnit(token[1..], KeyType.Text));
+            ku.AddRange(result);
+            return;
+        }
+
+
+        ParenthesisType? lastToken = StrParenthesis.GetStringParenthesisType(token[^1].ToString()) is ParenthesisType t1 && t1 != ParenthesisType.Unknown ?
+            t1 ^ ParenthesisType.Half : null;
+
+        switch (StrParenthesis.GetStringParenthesisType(token[0].ToString()) ^ ParenthesisType.Half)
+        {
+            case ParenthesisType.Small:
+                if (lastToken.HasValue)
+                {
+                    if (lastToken.Value == ParenthesisType.Small)
+                    {
+                        if (keys.TryGetValue(token[1..^1].Trim(), out KeyUnit variable) && variable.Type == KeyType.CritialVariable)
+                            result.Add(MakeUnit(token[1..^1], KeyType.CritialVariable));
+                        else
+                            result.Add(MakeUnit(token[1..^1], KeyType.Variable));
+                        if (lastToken.HasValue)
+                            result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                    }
+                    else
+                    {
+                        result.Clear();
+                        result.Add(MakeUnit(token, KeyType.Text));
+                    }
+                }
+                else
+                {
+                    if (keys.TryGetValue(token[1..].Trim(), out KeyUnit variable) && variable.Type == KeyType.CritialVariable)
+                        result.Add(MakeUnit(token[1..], KeyType.CritialVariable));
+                    else
+                        result.Add(MakeUnit(token[1..], KeyType.Variable));
+                    if (lastToken.HasValue)
+                        result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                }
+                break;
+            case ParenthesisType.Middle:
+                if (lastToken.HasValue)
+                {
+                    if (lastToken.Value == ParenthesisType.Middle)
+                    {
+                        ProcessIncompleteMiddleParenthesis(result, token[1..^1], keys);
+                        if (lastToken.HasValue)
+                            result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                    }
+                    else
+                    {
+                        result.Clear();
+                        result.Add(MakeUnit(token, KeyType.Text));
+                    }
+                }
+                else
+                {
+                    ProcessIncompleteMiddleParenthesis(result, token[1..], keys);
+                    if (lastToken.HasValue)
+                        result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                }
+                break;
+            case ParenthesisType.Big:
+                if (lastToken.HasValue)
+                {
+                    if (lastToken.Value == ParenthesisType.Big)
+                    {
+                        result.Add(MakeUnit(token[1..^1], KeyType.Type));
+                        if (lastToken.HasValue)
+                            result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                    }
+                    else
+                    {
+                        result.Clear();
+                        result.Add(MakeUnit(token, KeyType.Text));
+                    }
+                }
+                else
+                {
+                    result.Add(MakeUnit(token[1..], KeyType.Type));
+                    if (lastToken.HasValue)
+                        result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                }
+                break;
+            case ParenthesisType.Sharp:
+                if (lastToken.HasValue)
+                {
+                    ProcessIncompleteSharpParenthesis(result, token[1..^1], keys);
+                    if (lastToken.HasValue)
+                        result.Add(MakeUnit(token[^1].ToString(), KeyType.Parenthesis));
+                }
+                else
+                {
+                    ProcessIncompleteSharpParenthesis(result, token[1..], keys);
+                }
+                break;
+        }
+
+        ku.AddRange(result);
+    }
+
+    private void ProcessIncompleteMiddleParenthesis(List<KeyUnit> ku, string token, Dictionary<string, KeyUnit> keys)
+    {
+        StringBuilder sb = new();
+
+        bool isFlagFlag = false;
+        int count = 0;
+
+        KeyType? valueType = null;
+        foreach (char c in token)
+        {
+            if (c == ':')
+            {
+                string current = sb.ToString();
+                if (current.Trim() == "flag" && count <= 1)
+                {
+                    if (isFlagFlag)
+                    {
+                        ku.Add(MakeUnit(current, KeyType.Tag));
+                        goto ProcessIncompleteMiddleParenthesisForeachEnd;
+                    }
+                    else if (count == 0)
+                    {
+                        isFlagFlag = true;
+                        ku.Add(MakeUnit(current, KeyType.KnownType));
+                        goto ProcessIncompleteMiddleParenthesisForeachEnd;
+                    }
+                }
+                if (count == 0)
+                {
+                    if (keys.TryGetValue(current.Trim(), out var unit) && unit.Type == KeyType.KnownType)
+                    {
+                        ku.Add(MakeUnit(current, KeyType.KnownType));
+                        valueType = unit.ConstantType;
+                    }
+                    else
+                    {
+                        ku.Add(MakeUnit(current, KeyType.Type));
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                    continue;
+                }
+
+            ProcessIncompleteMiddleParenthesisForeachEnd:
+                count++;
+                sb.Clear();
+
+                ku.Add(MakeUnit(":", KeyType.Symbol));
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+
+        if (sb.Length == 0)
+            return;
+
+        if (count == 0)
+        {
+            if (keys.TryGetValue(sb.ToString().Trim(), out var unit) && unit.Type == KeyType.KnownType)
+            {
+                ku.Add(MakeUnit(sb.ToString(), KeyType.KnownType));
+            }
+            else
+            {
+                ku.Add(MakeUnit(sb.ToString(), KeyType.Type));
+            }
+        }
+        else if (count == 1)
+        {
+            if (isFlagFlag)
+                ku.Add(MakeUnit(sb.ToString(), KeyType.Tag));
+            else
+            {
+                var inCompletedUnits = new StringSplitEx(token, ':', 2).SplitUnit;
+                if (valueType.HasValue && inCompletedUnits.Count == 2 && valueType.Value != KeyType.Unknown && CodeHighlightRuleSet.ValueVaildRegularExpressions[valueType.Value].Match(inCompletedUnits[1].Trim()).Value.Length == inCompletedUnits[1].Trim().Length)
+                {
+                    ku.Add(MakeUnit(sb.ToString(), valueType.Value));
+                }
+                else
+                {
+                    ku.Add(MakeUnit(sb.ToString(), KeyType.Text));
+                }
+            }
+        }
+        else if(count == 2)
+        {
+            ku.Add(MakeUnit(sb.ToString(), KeyType.String));
+        }
+    }
+
+    private void ProcessIncompleteSharpParenthesis(List<KeyUnit> ku, string token, Dictionary<string, KeyUnit> keys)
+    {
+        if (token.Length == 0)
+            return;
+
+        StringSplitEx parts = new(token, ':', 2);
+        if (parts.SplitUnit.Count >= 1)
+        {
+            if (keys.TryGetValue(parts[0].Trim(), out KeyUnit tag) && tag.Type == KeyType.KnownType)
+            {
+                ku.Add(MakeUnit(parts[0], KeyType.KnownType));
+            }
+            else
+            {
+                ku.Add(MakeUnit(parts[0], KeyType.Type));
+            }
+        }
+        if (parts.SplitUnit.Count == 2)
+        {
+            ku.Add(MakeUnit(":", KeyType.Symbol));
+        }
+        else
+        {
+            return;
+        }
+
+        ProcessLeadingSpaces(ku, parts[1], TabSize);
+
+        string[] partElementsPre = parts[1].Split(',');
+
+        StringWhiteSpaceAround[] partElementsSlices = Array.ConvertAll(partElementsPre, input =>
+        {
+            StringWhiteSpaceAround swa = new();
+            int inputTrimedLen = input.Trim().Length;
+            swa[0] = new(' ', input.TrimEnd().Length - inputTrimedLen);
+            swa[1] = input.Trim();
+            swa[2] = new(' ', input.TrimStart().Length - inputTrimedLen);
+            return swa;
+        });
+
+        List<KeyUnit>[] elementKeyUnits = new List<KeyUnit>[partElementsSlices.Length];
+
+        for(int i = 0; i < partElementsSlices.Length; i++)
+        {
+            StringWhiteSpaceAround element = partElementsSlices[i];
+            List<KeyUnit> currentElementKeyUnits = new List<KeyUnit>();
+            if (!string.IsNullOrEmpty(element[0]))
+                currentElementKeyUnits.Add(MakeUnit(element[0], KeyType.Text));
+
+            if (!string.IsNullOrEmpty(element[1]))
+                ProcessSingleToken(currentElementKeyUnits, keys, TabSize, new SplitToken(element[1], SplitTokenType.Content), true);
+
+            if (!string.IsNullOrEmpty(element[2]))
+                currentElementKeyUnits.Add(MakeUnit(element[2], KeyType.Text));
+
+            elementKeyUnits[i] = currentElementKeyUnits;
+        };
+
+        ku.AddRange(elementKeyUnits.FlatIndirectInsert(MakeUnit(",", KeyType.Split)));
+    }
+
+    [InlineArray(3)]
+    struct StringWhiteSpaceAround { private string _inner; }
+
+
+
+    /// <summary>
+    /// Processes tokens with middle parentheses ([...]).
+    /// </summary>
+    private void ProcessMiddleParenthesis(List<KeyUnit> ku, string token, ParenthesisType part, Dictionary<string, KeyUnit> keys)
+    {
+        // Add opening bracket
+        ku.Add(MakeUnit("[", KeyType.Parenthesis));
+
+        // If token is just the opening bracket, add closing and return
+        if (token.Length == 1)
+        {
+            return;
+        }
+
+        // Process content inside the brackets
+        string content = token[1..^1];
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            if (content.Length > 0)
+            {
+                ku.Add(MakeUnit(content, KeyType.Text));
+            }
+            ku.Add(MakeUnit("]", KeyType.Parenthesis));
+            return;
+        }
+        // Split content by colon
+        var sp = new StringSplit(content, ':');
+
+        // Process first part after colon
+        if (keys.TryGetValue(sp[0].Trim(), out KeyUnit type) && type.Type == KeyType.KnownType)
+        {
+            ku.Add(MakeUnit(sp[0], KeyType.KnownType));
+        }
+        else
+        {
+            ku.Add(MakeUnit(sp[0], KeyType.Type));
+        }
+
+        if(sp.Tokens.Count <= 1)
+        {
+            ku.Add(MakeUnit("]", KeyType.Parenthesis));
+            return;
+        }
+
+        // Add colon symbol
+        ku.Add(MakeUnit(":", KeyType.Symbol));
+
+        // Handle "flag" type specifically
+        if (sp[0].Trim() == "flag")
+        {
+            ProcessFlagType(ku, token);
+        }
+        // For other types, check if they have constant type and validate content
+        else if (keys.ContainsKey(sp[0].Trim()) &&
+                 type.ConstantType.HasValue &&
+                 type.ConstantType.Value != KeyType.Unknown &&
+                 sp.SplitUnit.Length > 1)
+        {
+            var ct = type.ConstantType.Value;
+            bool canParse = IsOnlyType(string.Concat(sp[1..]).Trim(), CodeHighlightRuleSet.ValueVaildRegularExpressions[ct]);
+            ku.Add(MakeUnit(sp[1], canParse ? ct : KeyType.Text));
+        }
+        else if (sp.SplitUnit.Length > 1)
+        {
+            ku.Add(MakeUnit(string.Concat(sp[1..]), KeyType.Text));
+        }
+        ku.Add(MakeUnit("]", KeyType.Parenthesis));
+    }
+
+    /// <summary>
+    /// Processes "flag" type tokens inside middle parentheses.
+    /// </summary>
+    private void ProcessFlagType(List<KeyUnit> ku, string token)
+    {
+        // Split the content after the first colon by another colon
+        var sp2 = new StringSplitEx(token[1..^1], ':', 3);
+
+        if(sp2.SplitUnit.Count >= 2)
+        {
+            // Add tag and symbol
+            ku.Add(MakeUnit(sp2[1], KeyType.Tag));
+        }
+        
+        if(sp2.SplitUnit.Count > 2)
+        {
+            ku.Add(MakeUnit(":", KeyType.Symbol));
+            ku.Add(MakeUnit(sp2[2], KeyType.String));
+        }
+    }
+
+    /// <summary>
+    /// Processes tokens with small parentheses ((...)).
+    /// </summary>
+    private void ProcessSmallParenthesis(List<KeyUnit> ku, string token, ParenthesisType part, Dictionary<string, KeyUnit> keys)
+    {
+        // Add opening parenthesis
+        ku.Add(MakeUnit("(", KeyType.Parenthesis));
+
+        // Process content inside the parentheses
+        string content = token[1..(part.HasFlag(ParenthesisType.Half) ? token.Length - 1 : token.Length - 1)];
+
+        if (keys.TryGetValue(content.Trim(), out KeyUnit variable) && variable.Type == KeyType.CritialVariable)
+        {
+            ku.Add(MakeUnit(content, KeyType.CritialVariable));
+        }
+        else
+        {
+            ku.Add(MakeUnit(content, KeyType.Variable));
+        }
+
+        // Add closing parenthesis if needed
+        if (!part.HasFlag(ParenthesisType.Half))
+        {
+            ku.Add(MakeUnit(")", KeyType.Parenthesis));
+        }
+    }
+
+    /// <summary>
+    /// Processes tokens with sharp parentheses (<...>).
+    /// </summary>
+    private void ProcessSharpParenthesis(List<KeyUnit> ku, string token, ParenthesisType part, Dictionary<string, KeyUnit> keys, int tabSize)
+    {
+        // Add opening angle bracket
+        ku.Add(MakeUnit("<", KeyType.Parenthesis));
+
+        ProcessIncompleteSharpParenthesis(ku, token[1..^1], keys);
+
+        //// Split content by commas and process each item
+        //var aisp = new StringSplit(token[1..^1], ',');
+
+        //for (int aispi = 0; aispi < aisp.SplitUnit.Length; aispi++)
+        //{
+        //    string asu = aisp.SplitUnit[aispi];
+
+        //    // Add leading whitespace if any
+        //    var startMatch = StartWhiteSpace().Match(asu);
+        //    if (startMatch.Success && startMatch.Length > 0)
+        //    {
+        //        ku.Add(MakeUnit(startMatch.Value, KeyType.Split));
+        //        asu = asu.Substring(startMatch.Length);
+        //    }
+
+        //    // Process the actual content of the array element
+        //    List<KeyUnit> arrItem = GetUnits(asu.Trim(' '), keys, tabSize, false);
+        //    if (arrItem.Count > 0)
+        //        ku.AddRange(arrItem);
+
+        //    // Add trailing whitespace if any
+        //    var endMatch = EndWhiteSpace().Match(asu);
+        //    if (endMatch.Success && endMatch.Length > 0)
+        //    {
+        //        ku.Add(MakeUnit(endMatch.Value, KeyType.Split));
+        //    }
+
+        //    // Add comma if not the last element
+        //    if (aispi < aisp.SplitUnit.Length - 1)
+        //    {
+        //        ku.Add(MakeUnit(",", KeyType.Symbol));
+        //    }
+        //}
+
+        ku.Add(MakeUnit(">", KeyType.Parenthesis));
+    }
+
 
     public List<string> GetContentArea()
     {
@@ -746,11 +1333,13 @@ internal partial class Editor
 
         return line;
     }
+    private TextWriter defaultConsoleBufferOut = Console.Out;
 
     public void Update(int page)
     {
-        Console.Clear();
-        Console.Write("\x1b[3J");
+
+        VTConsole.SetColorBackground((Color)ConfigStyle.ColorStyle[KeyType.Text].BackgroundColor);
+        VTConsole.SetColorForeground((Color)ConfigStyle.ColorStyle[KeyType.Text].ForegroundColor);
 
         int start = page * Console.WindowHeight;
         int end = start + Console.WindowHeight;
@@ -758,13 +1347,16 @@ internal partial class Editor
         if (start > Units.Count)
             return;
 
+        StringWriter consoleBufferText = new();
+        Console.SetOut(consoleBufferText);
+
         var list = Units ?? new();
         foreach (var l in list.ToArray()[start..Math.Min(end, list.Count)])
         {
-            Console.Write("      ");
-            Console.CursorLeft = 0;
-            Console.Write(line);
-            Console.CursorLeft = TextAreaPaddingLeft;
+            VTConsole.Write("      ");
+            VTConsole.CursorAbsoluteHorizontal(1);
+            VTConsole.Write(line.ToString());
+            VTConsole.CursorAbsoluteHorizontal(TextAreaPaddingLeft + 1);
             foreach (var u in l)
             {
                 if (ConfigStyle.ColorStyle[u.Type].ForegroundColor.Equals(CodeHighlightRuleSet._none))
@@ -790,9 +1382,19 @@ internal partial class Editor
                 VTConsole.WriteLine();
             line++;
         }
+
+        Console.SetOut(defaultConsoleBufferOut);
+
+        Console.Clear();
+        Console.Write("\x1b[3J");
+
+        Console.SetCursorPosition(0, 0);
+        Console.Write(consoleBufferText.ToString());
+
+        consoleBufferText.Close();
     }
 
-    [GeneratedRegex("\\s+")]
+    [GeneratedRegex("^\\s+")]
     public static partial Regex StartWhiteSpace();
 
     [GeneratedRegex("$\\s+")]

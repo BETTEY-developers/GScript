@@ -49,7 +49,7 @@ internal class Entry
         _script.OpenWithContent(path);
 
         _script.Vars.Add(M_CallRet, new("$RET$"));
-        
+
         _script.Vars.Add(M_Argument1, new("$ARG$"));
         _script.Vars.Add(M_Argument2, new("$ARG1$"));
         _script.Vars.Add(M_Argument3, new("$ARG2$"));
@@ -58,21 +58,21 @@ internal class Entry
         _script.Vars.Add(M_Argument6, new("$ARG5$"));
         _script.Vars.Add(M_Argument7, new("$ARG6$"));
         _script.Vars.Add(M_Argument8, new("$ARG7$"));
-        _script.Vars.Add(M_SelfObject, new (M_SelfObject));
+        _script.Vars.Add(M_SelfObject, new(M_SelfObject));
         _script.Vars.Add(M_ValueStackTop, new(M_ValueStackTop));
         _script.Vars.Add(M_ValueStackPointer, new(M_ValueStackPointer));
         _script.Vars.Add(M_CommandResult, new(M_CommandResult));
 
-        for(int i = 0; i < 1024 * 8; i ++)
+        for (int i = 0; i < 1024 * 8; i++)
         {
             _valueStack.Add(new());
         }
 
-        Execute:
+    Execute:
 
         var result = _script.Execute();
 
-        if(!result)
+        if (!result)
         {
             Console.WriteLine(ExceptionOperator.GetLastError());
             Console.WriteLine(ExceptionOperator.GetException());
@@ -80,7 +80,7 @@ internal class Entry
             Console.WriteLine("unhandle exception");
         }
 
-        if(!_funcTable.ContainsKey("main"))
+        if (!_funcTable.ContainsKey("main"))
         {
             ExceptionOperator.SetLastErrorEx(new(0, "", new InvaildScriptSegmentException(), "No entry."));
             return;
@@ -104,11 +104,11 @@ internal class Entry
 
     private ClassTemplate _currentClass = null;
 
-    private Stack<int> _callStack = new(1024*8);
+    private Stack<int> _callStack = new(1024 * 8);
 
     private List<object> _valueStack = new(1024 * 8);
 
-    private Dictionary<Tag,int> _tags = new();
+    private Dictionary<Tag, int> _tags = new();
 
     private Dictionary<string, ClassTemplate> _classTemplateTable = new();
 
@@ -231,11 +231,11 @@ internal class Entry
                 _funcTable.Add(_currentFunc.Item1, _currentFunc.Item2);
             }
 
-            if(_callStack.Count > 0)
+            if (_callStack.Count > 0)
             {
-                if(context.Command.Args.Count > 0)
+                if (context.Command.Args.Count > 0)
                     Script.CurrentScript.SetVar(M_CallRet, context.Command.Args[0].Value);
-                
+
                 result.Line = _callStack.Pop();
             }
 
@@ -254,9 +254,9 @@ internal class Entry
                 return result;
             }
 
-            if(context.Command.Args.Count > 1)
+            if (context.Command.Args.Count > 1)
             {
-                for(int i = 1; i < context.Command.Args.Count; i++)
+                for (int i = 1; i < context.Command.Args.Count; i++)
                 {
                     Script.CurrentScript.SetVar($"$ARG{i}$", context.Command.Args[i].Value);
                 }
@@ -309,7 +309,7 @@ internal class Entry
 
             if (context.Command.Args[0] as Analyzer.InternalType.Variable != null && (context.Command.Args[0] as Analyzer.InternalType.Variable).Name == M_ValueStackTop)
             {
-                ExceptionOperator.SetLastError(GSBE_INVAILDCRITIALVARIABLEOPERATOR); 
+                ExceptionOperator.SetLastError(GSBE_INVAILDCRITIALVARIABLEOPERATOR);
                 result.Complated = false;
             }
             context.Command.Args[0].Value = context.Command.Args[1].Value;
@@ -330,7 +330,7 @@ internal class Entry
                 return result;
             }
             Script.CurrentScript.AddVar(variable.Name);
-            if(context.Command.Args.Count == 2)
+            if (context.Command.Args.Count == 2)
             {
                 Script.CurrentScript.SetVar(variable.Name, context.Command.Args[1].Value);
             }
@@ -393,7 +393,7 @@ internal class Entry
                     Script.CurrentScript.SetVar(M_CommandResult, aNumber + bNumber);
                     return true;
                 }
-                catch(OverflowException e)
+                catch (OverflowException e)
                 {
                     ErrorData ed = new(context.Line, context.Command.ToCommandString(), e, "Add operation overflow (number + number).");
                     ExceptionOperator.SetLastErrorEx(ed);
@@ -444,9 +444,8 @@ internal class Entry
             Type aType = avt as Type ?? typeof(void);
             Type bType = bvt as Type ?? typeof(void);
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -484,9 +483,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -521,9 +519,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -558,9 +555,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -595,9 +591,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -633,9 +628,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -671,15 +665,14 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
                         ExceptionOperator.SetLastError(GSBE_INVAILDCRITIALVARIABLEOPERATOR);
                         result.Complated = false;
-                        return result;;
+                        return result; ;
                     case M_ValueStackTop:
                         ExceptionOperator.SetLastError(GSBE_INVAILDCRITIALVARIABLEOPERATOR);
                         result.Complated = false;
@@ -709,9 +702,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -747,9 +739,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -784,9 +775,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -821,9 +811,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -858,9 +847,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -895,9 +883,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -932,9 +919,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -969,9 +955,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -1006,9 +991,8 @@ internal class Entry
             var a = context.Command.Args[0];
             var b = context.Command.Args[1];
 
-            if (a as Analyzer.InternalType.Variable != null)
+            if (a is Analyzer.InternalType.Variable v)
             {
-                var v = (a as Analyzer.InternalType.Variable);
                 switch (v.Name)
                 {
                     case M_ValueStackPointer:
@@ -1060,7 +1044,7 @@ internal class Entry
                 result.Complated = false;
                 return result;
             }
-            else if(Pointer < length -1)
+            else if (Pointer < length - 1)
             {
                 for (int i = length - 1; i > (length - 1 - Pointer); i--)
                 {
@@ -1103,7 +1087,7 @@ internal class Entry
             {
                 _valueStack[Pointer] = new();
             }
-            
+
             _script.SetVar(M_CommandResult, pv);
             return result;
         }
@@ -1121,7 +1105,7 @@ internal class Entry
                 result.Complated = false;
                 return result;
             }
-            
+
             _script.SetVar(M_CommandResult, _script.Vars[M_ValueStackPointer].Value);
             return result;
         }
@@ -1139,7 +1123,7 @@ internal class Entry
         {
             if (arg is Tag tag)
             {
-                line = _tags.First(x=>x.Key.TagName == tag.TagName).Value;
+                line = _tags.First(x => x.Key.TagName == tag.TagName).Value;
             }
             else if (arg is ScriptObject elsetag && elsetag.ValueType == TypeField.Int)
             {
@@ -1178,7 +1162,7 @@ internal class Entry
                     if (context.Command.Args[0].Value is bool c && c)
                     {
                         bool complate = JmpInternal(context.Command.Args[1], context.Command.ToCommandString(), ref line);
-                        if(complate)
+                        if (complate)
                         {
                             result.Line = line;
                         }
@@ -1364,7 +1348,7 @@ internal class Entry
 
             if (_callStack.Count > 0)
             {
-                if(context.Command.Args.Count > 0)
+                if (context.Command.Args.Count > 0)
                 {
                     Script.CurrentScript.SetVar(M_CallRet, context.Command.Args[0]);
                 }
@@ -1449,12 +1433,12 @@ internal class Entry
             if ((context.Command.Args[1] as ObjectType).Exists)
             {
                 Type t = (context.Command.Args[1] as ObjectType).Value as Type;
-                var method = t.GetMethod(context.Command.Args[2].Value as string, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, context.Command.Args.Count > 3? context.Command.Args.ToArray()[3..].Select(x => DeBox(x).GetType()).ToArray() : Array.Empty<Type>());
+                var method = t.GetMethod(context.Command.Args[2].Value as string, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, context.Command.Args.Count > 3 ? context.Command.Args.ToArray()[3..].Select(x => DeBox(x).GetType()).ToArray() : Array.Empty<Type>());
 
                 List<object> param = new();
 
                 int i = 0;
-                foreach(var pi in method.GetParameters())
+                foreach (var pi in method.GetParameters())
                 {
                     param.Add(Convert.ChangeType(context.Command.Args[3 + i].Value, pi.ParameterType));
                 }
@@ -1484,7 +1468,7 @@ internal class Entry
             int line = context.Line;
 
             bool complate = instance.Invoke($".{(context.Command.Args[1] as ObjectType).Value as string}@{(context.Command.Args.Count > 3 ? GeneratorFunctionSignature(context.Command.Args.ToArray()[3..]) : "")}.{context.Command.Args[2]}", ref line, context.Command.Args.Count > 3 ? argArray[3..] : null);
-            if(complate)
+            if (complate)
             {
                 result.Line = line;
                 _callStack.Push(orgline);
@@ -1521,7 +1505,7 @@ internal class Entry
             {
                 Script.CurrentScript.SetVar(M_CommandResult, instance.GetProperty(context.Command.Args[2].Value as string));
             }
-            catch(KeyNotFoundException e)
+            catch (KeyNotFoundException e)
             {
                 ErrorData ed = new(context.Line, context.Command.ToCommandString(), e, "Member in " + instance.ClassName + "  no found.");
                 ExceptionOperator.SetLastErrorEx(ed);
@@ -1538,7 +1522,7 @@ internal class Entry
 
         static object DeBox(ScriptObject scriptObject)
         {
-            if(scriptObject is not Analyzer.InternalType.Variable)
+            if (scriptObject is not Analyzer.InternalType.Variable)
             {
                 return scriptObject.Value;
             }
@@ -1590,9 +1574,9 @@ internal class Entry
 
             _currentClass.ClassEnd(context.Line);
             _classTemplateTable.Add(_currentClass.Name, _currentClass);
-            
 
-            var ctorPairList = 
+
+            var ctorPairList =
                 _currentClass
                 .GetFunctions()
                 .ToList();
@@ -1603,7 +1587,7 @@ internal class Entry
 
             DefaultCommandParser.RegisterCustomTypeConverter(_currentClass.Name, (args) =>
             {
-                if(!ctorList.Any(x => x.Name == $".{_currentClass.Name}@{GeneratorFunctionSignature(context.Command.Args.ToArray())}..ctor"))
+                if (!ctorList.Any(x => x.Name == $".{_currentClass.Name}@{GeneratorFunctionSignature(context.Command.Args.ToArray())}..ctor"))
                 {
                     return null;
                 }
@@ -1650,7 +1634,7 @@ internal class Entry
 
             int orgline = context.Line;
 
-            if(!_classTemplateTable.ContainsKey((context.Command.Args[1] as ObjectType).Value as string))
+            if (!_classTemplateTable.ContainsKey((context.Command.Args[1] as ObjectType).Value as string))
             {
                 ErrorData ed = new ErrorData(context.Line, context.Command.ToCommandString(), new ArgumentException("Class " + ((context.Command.Args[1] as ObjectType).Value as string) + " not in this script. (maybe not include?)"), "Class " + ((context.Command.Args[1] as ObjectType).Value as string) + " not in this script. (maybe not include?)");
                 ExceptionOperator.SetLastErrorEx(ed);
@@ -1659,7 +1643,7 @@ internal class Entry
             }
 
             var instance = _classTemplateTable[(context.Command.Args[1] as ObjectType).Value as string].CreateInstance(context.Command.Args[0].Value as string);
-            
+
             ScriptObject[] argArray = context.Command.Args.ToArray();
             int line = context.Line;
             bool complate = instance.Invoke($".{(context.Command.Args[1] as ObjectType).Value as string}@{(context.Command.Args.Count > 2 ? GeneratorFunctionSignature(context.Command.Args.ToArray()[2..]) : "")}.ctor", ref line, context.Command.Args.Count > 2 ? argArray[2..] : null);
@@ -1689,7 +1673,7 @@ internal class Entry
                 if (cmd.Name.Contains(attributeitem))
                     return;
             }
-            
+
             cancel = _inFuncBlock || _noRun;
         }
 
@@ -1729,7 +1713,7 @@ internal class Entry
                 VaildArgumentCount = true,
                 VaildArgumentParenthesis = true,
                 VaildArgumentType = true,
-                CountRange = new Range(1,1),
+                CountRange = new Range(1, 1),
                 ArgumentParenthesisTypePairs = new List<GScript.Analyzer.Util.ParenthesisType>()
                 { GScript.Analyzer.Util.ParenthesisType.Middle },
                 ArgumentTypePairs = new()
@@ -1760,17 +1744,17 @@ internal class Entry
                 CountRange = new Range(1, 9),
                 ArgumentParenthesisTypePairs = new List<GScript.Analyzer.Util.ParenthesisType>()
                 { GScript.Analyzer.Util.ParenthesisType.Middle },
-                ArgumentTypePairs = new ()
-                { 
-                    "function", 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object, 
-                    TypeField.Object  
+                ArgumentTypePairs = new()
+                {
+                    "function",
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object,
+                    TypeField.Object
                 }
             }
         ));
@@ -2102,7 +2086,7 @@ internal class Entry
             {
                 CountRange = new Range(3, 3),
                 VaildArgumentCount = true,
-                VaildArgumentType = true,  
+                VaildArgumentType = true,
                 VaildArgumentParenthesis = false,
                 ArgumentTypePairs = new()
                 {

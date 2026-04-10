@@ -18,6 +18,16 @@ internal struct KnownTypeKeyUnit
     public KeyType Type { get; set; }
     public string RawString { get; set; }
     public KeyType ConstantType { get; set; }
+
+    public static explicit operator KeyUnit(KnownTypeKeyUnit unit)
+    {
+        return new KeyUnit
+        {
+            Type = unit.Type,
+            RawString = unit.RawString,
+            ConstantType = unit.ConstantType
+        };
+    }
 }
 
 internal struct NormalKeyUnit

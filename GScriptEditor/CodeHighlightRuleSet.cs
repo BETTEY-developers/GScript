@@ -20,8 +20,14 @@ internal static partial class CodeHighlightRuleSet
     [GeneratedRegex(@"\d+.\d+")]
     private static partial Regex _FloatMatchRegexGenerated(); 
     public static Regex FloatMatchRegex => _FloatMatchRegexGenerated();
-    public static Regex BooleanMatchRegex = new(@"true|false");
-    public static Regex AnyMatchRegex = new Regex(@".*");
+
+    [GeneratedRegex(@"true|false")]
+    private static partial Regex _BooleanMatchRegexGenerated();
+    public static Regex BooleanMatchRegex => _BooleanMatchRegexGenerated();
+
+    [GeneratedRegex(@".*")]
+    private static partial Regex _AnyMatchRegexGenerated();
+    public static Regex AnyMatchRegex => _AnyMatchRegexGenerated();
 
     public static Dictionary<KeyType, Regex> ValueVaildRegularExpressions => new()
     {
